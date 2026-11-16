@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Théo contre la deadline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout : une colonne à gauche ; le terrain de jeu occupe toute la largeur de la colonne.
+   L'élément fort est le terrain et ses deux formes (pastille jaune à attraper, bloc rouge à esquiver). */
+:root{
+  --bg:#f2f3f8;
+  --surface:#ffffff;
+  --ink:#1f2542;
+  --muted:#5d6385;
+  --line:#d5d8e6;
+  --accent:#e8504f;
+  --accent-ink:#ffffff;
+  --mark:#ffd866;
+  --mark-ink:#1f2542;
+  --font-display:"Bricolage Grotesque","Arial Narrow",Arial,sans-serif;
+  --font-body:"Instrument Sans","Segoe UI",Helvetica,Arial,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#14182b;--surface:#1e2440;--ink:#eef0fa;--muted:#a3a9c9;--line:#343b62;
+    --accent:#ff6f6b;--accent-ink:#14182b;--mark:#ffd866;--mark-ink:#14182b;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14182b;--surface:#1e2440;--ink:#eef0fa;--muted:#a3a9c9;--line:#343b62;
+  --accent:#ff6f6b;--accent-ink:#14182b;--mark:#ffd866;--mark-ink:#14182b;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:17px;line-height:1.5}
+main{max-width:740px;margin:0 auto;padding:28px 20px 72px;display:flex;flex-direction:column;gap:24px}
+h1,h2{font-family:var(--font-display);font-weight:800;line-height:1.02;margin:0;text-wrap:balance;letter-spacing:-.02em}
+h1{font-size:clamp(2.4rem,8.5vw,4.4rem)}
+h2{font-size:clamp(1.6rem,5vw,2.3rem)}
+p{margin:0;max-width:62ch}
+.muted{color:var(--muted)}
+.small{font-size:.88rem}
+.head{display:flex;flex-direction:column;gap:10px}
+.stamp{display:inline-block;align-self:flex-start;font-family:var(--font-display);font-weight:800;font-size:clamp(1rem,3vw,1.2rem);
+  background:var(--mark);color:var(--mark-ink);padding:6px 12px;border-radius:4px;transform:rotate(-1.5deg)}
+
+.btn{font:inherit;font-weight:600;border:0;border-radius:999px;padding:13px 26px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--ink);border:2px solid var(--line)}
+.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+
+/* légende des deux formes */
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.legend>div{background:var(--surface);border:2px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.pill,.block{font-weight:600;font-size:.92rem;padding:8px 16px;display:inline-block}
+.pill{background:var(--mark);color:var(--mark-ink);border-radius:999px}
+.block{background:var(--accent);color:var(--accent-ink);border-radius:3px}
+kbd{font:inherit;font-weight:600;border:2px solid var(--line);border-radius:6px;padding:1px 8px;background:var(--surface)}
+
+/* terrain */
+.hud{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline;font-weight:600}
+.hud .day{font-family:var(--font-display);font-weight:800;font-size:1.3rem}
+.hud .stat{font-variant-numeric:tabular-nums;font-size:.95rem}
+.dots i{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid var(--accent);margin-left:4px;vertical-align:-1px}
+.dots i.on{background:var(--accent)}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--ink)}
+.field{background:var(--surface);border:2px solid var(--line);border-radius:12px;overflow:hidden;touch-action:none}
+.field.hurt{border-color:var(--accent)}
+canvas{display:block;width:100%;height:320px}
+.toast{min-height:4.6em;border-left:5px solid var(--line);padding:4px 0 4px 14px;display:flex;flex-direction:column;gap:2px}
+.toast.good{border-color:var(--mark)}
+.toast.bad{border-color:var(--accent)}
+.toast b{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pad{display:flex;gap:12px}
+.pad button{flex:1;font:inherit;font-weight:600;padding:14px;border-radius:12px;border:2px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;touch-action:manipulation}
+.pad button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* fiches */
+.card{background:var(--surface);border:2px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px}
+.steptag{font-family:var(--font-display);font-weight:800;font-size:.95rem;color:var(--accent);text-transform:uppercase;letter-spacing:.05em}
+.met{display:flex;flex-direction:column;gap:14px;margin:0;padding:0;list-style:none}
+.met li{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+dl{margin:0;display:flex;flex-direction:column;gap:12px}
+dt{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+dd{margin:2px 0 0}
+.sheet .lead{font-weight:600}
+.sheet .item{display:flex;flex-direction:column;gap:8px;padding-top:16px;border-top:2px solid var(--line)}
+.sheet .item:first-of-type{border-top:0;padding-top:0}
+.score{font-family:var(--font-display);font-weight:800;font-size:clamp(3rem,12vw,5.5rem);line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+(function(){
+"use strict";
+
+var LEVELS=[
+{name:"Lundi → mercredi",sub:"Le projet démarre",speed:215,gap:1.25,pair:0,
+ items:[
+  {g:1,label:"Relire le brief",info:"On peut compter sur moi pour clarifier la demande : je relis le brief avant de produire."},
+  {g:1,label:"Lister mes questions",info:"Mon 1er réflexe en groupe : analyser et poser des questions avant de m'engager."},
+  {g:0,label:"Avancer sans prévenir",info:"Ma qualité surutilisée, l'autonomie : j'avance sans tenir le groupe au courant de ce que je fais."},
+  {g:0,label:"Refaire à leur place",info:"Sous pression, je refais le travail des autres dans mon coin au lieu d'en parler."}
+ ]},
+{name:"Jeudi",sub:"La pression monte",speed:285,gap:1.05,pair:.3,
+ items:[
+  {g:1,label:"Faire ma part",info:"Faire réellement ma part : je n'aime pas être inutile au groupe."},
+  {g:1,label:"Dire où j'en suis",info:"Si je n'ai pas avancé, le dire le jour même au lieu de le maquiller."},
+  {g:0,label:"« Presque fini ! »",info:"Sous pression, j'annonce « presque fini » quand ce n'est pas le cas."},
+  {g:0,label:"Tout prendre sur moi",info:"Sous pression, je prends tout sur moi sans rien dire, jusqu'à saturer."},
+  {g:0,label:"Faire semblant",info:"Il m'est arrivé de présenter dix minutes de travail comme plusieurs heures."}
+ ],
+ story:{title:"Histoire vraie : vingt slides à produire",rows:[
+  ["La situation","Le week-end dernier, sur un projet de cours, mon groupe devait produire 20 slides. Je n'en ai fait aucune."],
+  ["Ma réaction","J'ai monté un début de site en dix minutes, puis j'ai dit au groupe que j'avais énormément travaillé."],
+  ["Ce que je ferais différemment","Faire réellement ma part, parce que je n'aime pas être inutile au groupe. Et si je n'ai pas avancé, le dire le jour même au lieu de le maquiller."]]}},
+{name:"Vendredi",sub:"Sprint final avant 9h",speed:345,gap:.92,pair:.45,
+ items:[
+  {g:1,label:"Vérifier avant d'agir",info:"Mon besoin de rigueur, côté utile : je relis et je pose des questions avant de m'engager."},
+  {g:1,label:"Garder ça pour moi",info:"Je ne critique pas mes supérieurs auprès de collègues, encore moins par écrit."},
+  {g:0,label:"Travail approximatif",info:"Ce qui m'agace le plus chez les autres : improviser et rendre un travail approximatif."},
+  {g:0,label:"Exiger trop des autres",info:"Cet agacement dit de moi que j'applique parfois aux autres une exigence qu'on ne m'a pas demandée."},
+  {g:0,label:"Le mail de trop",info:"En stage, j'ai critiqué ma manageuse dans un mail à une collègue. Le mail lui est parvenu."}
+ ],
+ story:{title:"Histoire vraie : je voulais seulement la prévenir",rows:[
+  ["Mon intention","Pendant mon stage à la SNCF, prévenir une alternante de mon équipe."],
+  ["Mon comportement","Un mail dans lequel je critiquais ma manageuse. Il lui est parvenu."],
+  ["L'impact sur les autres","Trois à quatre jours de mauvaise ambiance dans toute l'équipe : ma manageuse pensait que tout le monde partageait mon avis."],
+  ["Ce que je ferais différemment","Je ne critique pas mes supérieurs auprès de collègues, encore moins par écrit. Ce que j'en pense, je le garde pour moi."]]}},
+{name:"Le projet suivant",sub:"Travailler avec moi",speed:315,gap:.98,pair:.35,
+ items:[
+  {g:1,label:"Un retour précis",info:"Pour me faire un retour utile, partez d'un fait précis : un fichier, une date, une phrase que j'ai dite."},
+  {g:1,label:"« Tu en es où ? »",info:"N'hésitez pas à me signaler quand vous n'avez plus de nouvelles de moi depuis un moment."},
+  {g:1,label:"Montrer où j'en suis",info:"Je m'engage à dire le jour même où j'en suis, au lieu de le maquiller."},
+  {g:1,label:"Un retour à mon tuteur",info:"En stage à la SNCF, mon tuteur m'a demandé un retour : je lui ai donné mon point de vue directement, avec bienveillance."},
+  {g:0,label:"Silence radio",info:"J'ai parfois tendance à avancer sans tenir le groupe au courant."},
+  {g:0,label:"« Presque fini ! »",info:"J'ai parfois tendance à annoncer « presque fini » quand ce n'est pas le cas."}
+ ],
+ story:{title:"Travailler avec moi",rows:[
+  ["Vous pouvez compter sur moi pour…","Clarifier la demande avant de produire : je relis le brief et je liste les questions à poser."],
+  ["J'ai parfois tendance à…","Avancer sans tenir le groupe au courant, tout prendre sur moi sans rien dire, et annoncer « presque fini » quand ce n'est pas le cas."],
+  ["Pour me faire un retour utile…","Partez d'un fait précis : un fichier, une date, une phrase que j'ai dite. J'analyse avant de réagir, et un exemple concret m'aide plus qu'une impression générale."],
+  ["Quand je donne un retour…","Pendant mon stage à la SNCF, mon tuteur m'a demandé un retour sur le stage. Je lui ai donné mon point de vue directement, avec bienveillance. Je le fais volontiers quand on me le demande ; quand on ne me le demande pas, j'ai plus de mal à le dire à la bonne personne, comme l'a montré mon mail."],
+  ["N'hésitez pas à me signaler…","Quand vous n'avez plus de nouvelles de moi depuis un moment, ou quand mon « presque fini » dure. Demandez-moi de montrer où j'en suis."],
+  ["De mon côté, je m'engage à…","Faire réellement ma part, dire le jour même où j'en suis au lieu de le maquiller, et ne pas critiquer un supérieur par écrit auprès de collègues."]]}}
+];
+
+var SHEET=[
+{tag:"Étape 1 · quand un projet se complique",items:[
+ {l:"Les autres peuvent généralement compter sur moi pour…",t:"Clarifier la demande : je relis le brief et je liste les questions à poser avant de produire."},
+ {l:"Lorsque la pression augmente, j'ai parfois tendance à…",t:"Tout prendre sur moi sans rien dire, jusqu'à saturer. Refaire le travail des autres dans mon coin au lieu d'en parler. Annoncer « presque fini » quand ce n'est pas le cas."},
+ {l:"Une situation récente où j'aurais pu prévenir, clarifier ou agir plus tôt",dl:LEVELS[1].story.rows}
+]},
+{tag:"Étape 2 · travailler avec les autres",items:[
+ {l:"Dans un groupe, mon 1er réflexe est généralement…",t:"D'analyser : je relis et je pose des questions avant de m'engager."},
+ {l:"La qualité que je peux parfois surutiliser est…",t:"L'autonomie : j'avance sans tenir le groupe au courant de ce que je fais."},
+ {l:"Le comportement des autres qui m'agace le plus est…",t:"Quand quelqu'un improvise et rend un travail approximatif."},
+ {l:"Cet agacement dit peut-être de mon propre fonctionnement que…",t:"J'ai besoin de rigueur, et j'applique parfois aux autres une exigence qu'on ne m'a pas demandée."},
+ {l:"Une situation où mon intention et l'impact produit étaient différents",dl:LEVELS[2].story.rows}
+]},
+{tag:"Étape 3 · la réputation que je veux construire",items:[
+ {l:"Travailler avec moi",dl:LEVELS[3].story.rows}
+]}
+];
+
+var REPS=3,LIVES=3;
+var app=document.getElementById("app");
+var S={lvl:0,res:[]};           // res[l]={got,goods,hit}
+var raf=0,keyHandler=null;
+
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function dl(rows){return'<dl>'+rows.map(function(r){return'<div><dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd></div>';}).join("")+'</dl>';}
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+function stop(){cancelAnimationFrame(raf);raf=0;if(keyHandler){window.removeEventListener("keydown",keyHandler);keyHandler=null;}}
+function top(){window.scrollTo(0,0);}
+
+function intro(){
+  stop();
+  var resume=S.lvl>0&&S.lvl<LEVELS.length;
+  app.innerHTML='<div class="head"><span class="stamp">Portfolio de Théo Legrain · mon mode d\'emploi de communicant</span><h1>Théo contre la deadline</h1></div>'+
+  '<p>Mon groupe rend son projet vendredi à 9h. Vous me pilotez pendant quatre manches : trois avant le rendu, une sur le projet suivant. Sur la route arrivent mes bons réflexes et mes pièges habituels : attrapez les premiers, esquivez les seconds.</p>'+
+  '<div class="legend"><div><span class="pill">Relire le brief</span><span>Pastille jaune : un réflexe sur lequel le groupe peut compter. À attraper.</span></div>'+
+  '<div><span class="block">« Presque fini ! »</span><span>Bloc rouge : un de mes pièges. Chaque choc coûte un point de confiance du groupe. Vous en avez trois par manche.</span></div></div>'+
+  '<p>Pour changer de couloir : touches <kbd>↑</kbd> et <kbd>↓</kbd>, ou les boutons Monter et Descendre sous le terrain.</p>'+
+  '<p class="muted">Entre les manches, vous lirez ce que chaque pastille et chaque bloc dit de ma façon de travailler, avec deux histoires vraies et ma page « Travailler avec moi ». Comptez cinq minutes.</p>'+
+  '<div class="row"><button class="btn" id="go">'+(resume?"Reprendre : "+esc(LEVELS[S.lvl].name):"Commencer lundi")+'</button>'+(resume?'<button class="btn ghost" id="zero">Recommencer lundi</button>':'')+'</div>';
+  document.getElementById("go").onclick=function(){play(resume?S.lvl:0);};
+  var z=document.getElementById("zero");if(z)z.onclick=function(){S={lvl:0,res:[]};play(0);};
+}
+
+function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+
+function play(l){
+  stop();S.lvl=l;
+  var L=LEVELS[l];
+  app.innerHTML='<div class="hud"><span class="day">'+esc(L.name)+' <span class="muted small">'+esc(L.sub)+'</span></span>'+
+   '<span class="stat">Confiance du groupe <span class="dots" id="dots"></span></span><span class="stat" id="got"></span></div>'+
+   '<div class="bar" aria-hidden="true"><i id="bar"></i></div>'+
+   '<div class="field" id="field"><canvas id="cv" aria-label="Terrain de jeu : trois couloirs, Théo à gauche, les pastilles et les blocs arrivent par la droite"></canvas></div>'+
+   '<div class="pad"><button id="up" aria-label="Monter d\'un couloir">▲ Monter</button><button id="down" aria-label="Descendre d\'un couloir">▼ Descendre</button></div>'+
+   '<div class="toast" id="toast" aria-live="polite"><b>Manche '+(l+1)+' sur '+LEVELS.length+'</b><span>Attrapez les pastilles jaunes, esquivez les blocs rouges.</span></div>';
+  top();
+  var cv=document.getElementById("cv"),c=cv.getContext("2d"),field=document.getElementById("field");
+  var toast=document.getElementById("toast"),bar=document.getElementById("bar"),dots=document.getElementById("dots"),gotEl=document.getElementById("got");
+  var W=0,H=320,dpr=1,col={};
+  function size(){dpr=window.devicePixelRatio||1;W=cv.clientWidth||700;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+    col={ink:css("--ink"),muted:css("--muted"),line:css("--line"),accent:css("--accent"),accentInk:css("--accent-ink"),mark:css("--mark"),markInk:css("--mark-ink"),surface:css("--surface")};}
+  size();
+  var onResize=function(){if(document.getElementById("cv")===cv)size();else window.removeEventListener("resize",onResize);};
+  window.addEventListener("resize",onResize);
+
+  var queue=[];L.items.forEach(function(it,i){for(var n=0;n<REPS;n++)queue.push(i);});shuffle(queue);
+  var total=queue.length,goods=L.items.filter(function(i){return i.g;}).length*REPS;
+  var traps=L.items.map(function(it,i){return it.g?-1:i;}).filter(function(i){return i>=0;});
+  var G={items:[],t:0,next:1.3,lane:1,y:0,lives:LIVES,got:0,hit:0,inv:0,endAt:0,last:0};
+  var lanes=[H*.2,H*.5,H*.8];G.y=lanes[1];
+
+  function hud(){var h="";for(var i=0;i<LIVES;i++)h+='<i class="'+(i<G.lives?"on":"")+'"></i>';dots.innerHTML=h;
+    gotEl.textContent="Bons réflexes "+G.got+" / "+goods;bar.style.width=Math.round(100*(total-queue.length)/total)+"%";}
+  hud();
+  function say(kind,it){toast.className="toast "+kind;toast.innerHTML='<b>'+(kind==="good"?"Attrapé · ":"Touché · ")+esc(it.label)+'</b><span>'+esc(it.info)+'</span>';}
+  function move(d){G.lane=Math.max(0,Math.min(2,G.lane+d));}
+  keyHandler=function(e){
+    if(e.key==="ArrowUp"||e.key==="z"||e.key==="w"){move(-1);e.preventDefault();}
+    else if(e.key==="ArrowDown"||e.key==="s"){move(1);e.preventDefault();}
+  };
+  window.addEventListener("keydown",keyHandler);
+  document.getElementById("up").onclick=function(){move(-1);};
+  document.getElementById("down").onclick=function(){move(1);};
+  cv.addEventListener("pointerdown",function(e){var r=cv.getBoundingClientRect();move((e.clientY-r.top)<G.y?-1:1);});
+
+  function spawn(idx,lane){
+    var it=L.items[idx];c.font="600 "+(W<480?12:14)+"px Instrument Sans, sans-serif";
+    var w=c.measureText(it.label).width+34;
+    G.items.push({i:idx,lane:lane,x:W+10,w:w,it:it});
+  }
+  function step(dt){
+    var k=W/700,v=L.speed*Math.max(.6,k);
+    G.t+=dt;if(G.inv>0)G.inv-=dt;
+    if(queue.length&&G.t>=G.next){
+      var lane=Math.floor(Math.random()*3);spawn(queue.pop(),lane);
+      if(traps.length&&Math.random()<L.pair){var o=(lane+1+Math.floor(Math.random()*2))%3;spawn(traps[Math.floor(Math.random()*traps.length)],o);}
+      G.next=G.t+L.gap*(.85+Math.random()*.3);hud();
+    }
+    G.y+=(lanes[G.lane]-G.y)*Math.min(1,dt*18);
+    var px=Math.max(54,W*.13);
+    for(var n=G.items.length-1;n>=0;n--){
+      var o2=G.items[n];o2.x-=v*dt;
+      if(o2.lane===G.lane&&o2.x<px+16&&o2.x+o2.w>px-16){
+        if(o2.it.g){G.got++;say("good",o2.it);G.items.splice(n,1);hud();continue;}
+        if(G.inv<=0){G.lives--;G.hit++;G.inv=.9;say("bad",o2.it);field.classList.add("hurt");setTimeout(function(){field.classList.remove("hurt");},300);G.items.splice(n,1);hud();continue;}
+      }
+      if(o2.x+o2.w<-10)G.items.splice(n,1);
+    }
+    if(G.lives<=0)return"over";
+    if(!queue.length&&!G.items.length){if(!G.endAt)G.endAt=G.t+.6;else if(G.t>=G.endAt)return"done";}
+    return"";
+  }
+  function draw(){
+    c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
+    var px=Math.max(54,W*.13),off=(G.t*L.speed)%40;
+    c.strokeStyle=col.line;c.lineWidth=2;c.setLineDash([18,22]);
+    lanes.forEach(function(y){c.beginPath();c.lineDashOffset=off;c.moveTo(0,y+30);c.lineTo(W,y+30);c.stroke();});
+    c.setLineDash([]);
+    c.font="600 "+(W<480?12:14)+"px Instrument Sans, sans-serif";c.textBaseline="middle";
+    G.items.forEach(function(o){
+      var h=38,y=lanes[o.lane]-h/2;
+      c.fillStyle=o.it.g?col.mark:col.accent;rr(c,o.x,y,o.w,h,o.it.g?19:3);c.fill();
+      c.fillStyle=o.it.g?col.markInk:col.accentInk;c.fillText(o.it.label,o.x+17,lanes[o.lane]+1);
+    });
+    // Théo
+    if(G.inv>0&&Math.floor(G.t*14)%2)c.globalAlpha=.35;
+    var y=G.y,sw=Math.sin(G.t*16)*6;
+    c.strokeStyle=col.ink;c.lineWidth=4;c.lineCap="round";
+    c.beginPath();c.moveTo(px-5,y+12);c.lineTo(px-5-sw,y+27);c.moveTo(px+5,y+12);c.lineTo(px+5+sw,y+27);c.stroke();
+    c.fillStyle=col.muted;rr(c,px-12,y-12,24,26,8);c.fill();
+    c.fillStyle="#f0a988";c.beginPath();c.arc(px,y-22,10,0,Math.PI*2);c.fill();
+    c.fillStyle=col.ink;c.beginPath();c.arc(px,y-24,10.5,Math.PI,0);c.fill();
+    c.globalAlpha=1;
+  }
+  function frame(ts){
+    var dt=G.last?Math.min(.05,(ts-G.last)/1000):0;G.last=ts;
+    var r=step(dt);draw();
+    if(r){S.res[l]={got:G.got,goods:goods,hit:G.hit};window.removeEventListener("resize",onResize);stop();return r==="over"?over(l):inter(l);}
+    raf=requestAnimationFrame(frame);
+  }
+  draw();raf=requestAnimationFrame(frame);
+}
+
+function over(l){
+  app.innerHTML='<div class="head"><span class="stamp">'+esc(LEVELS[l].name)+'</span><h2>Le groupe ne suit plus</h2></div>'+
+  '<p>Trois pièges touchés dans la même manche : la confiance du groupe est à zéro. Dans un vrai projet, c\'est à ce moment-là que plus personne ne croit mes « presque fini ».</p>'+
+  '<div class="row"><button class="btn" id="re">Rejouer la manche</button><button class="btn ghost" id="skip">Lire ce que j\'ai croisé</button></div>';
+  top();
+  document.getElementById("re").onclick=function(){play(l);};
+  document.getElementById("skip").onclick=function(){inter(l);};
+}
+
+function inter(l){
+  var L=LEVELS[l],r=S.res[l]||{got:0,goods:0,hit:0},last=l===LEVELS.length-1;
+  S.lvl=l+1;
+  var h='<div class="head"><span class="stamp">Manche '+(l+1)+' terminée</span><h2>'+esc(L.name)+' : '+r.got+' bons réflexes sur '+r.goods+', '+r.hit+' piège'+(r.hit>1?"s":"")+' touché'+(r.hit>1?"s":"")+'</h2></div>'+
+  '<p>Tout allait vite. Voici, à tête reposée, ce que vous venez de croiser sur la route.</p><div class="card"><ul class="met">';
+  L.items.forEach(function(it){h+='<li><span class="'+(it.g?"pill":"block")+'">'+esc(it.label)+'</span><span>'+esc(it.info)+'</span></li>';});
+  h+='</ul></div>';
+  if(L.story)h+='<div class="card"><span class="steptag">'+esc(L.story.title)+'</span>'+dl(L.story.rows)+'</div>';
+  h+='<div class="row"><button class="btn" id="next">'+(last?"Voir mon mode d'emploi":"Manche suivante : "+esc(LEVELS[l+1].name))+'</button><button class="btn ghost" id="re">Rejouer cette manche</button></div>';
+  app.innerHTML=h;top();
+  document.getElementById("next").onclick=function(){last?final():play(l+1);};
+  document.getElementById("re").onclick=function(){play(l);};
+}
+
+function final(){
+  stop();S.lvl=LEVELS.length;
+  var got=0,goods=0,hit=0;LEVELS.forEach(function(L,i){var r=S.res[i]||{got:0,goods:L.items.filter(function(x){return x.g;}).length*REPS,hit:0};got+=r.got;goods+=r.goods;hit+=r.hit;});
+  var line=hit===0&&got===goods?"Sans faute. Vous me pilotez mieux que moi.":hit<=3?"Rendu tenu, groupe encore soudé.":"Rendu tenu, mais le groupe a eu chaud.";
+  var h='<div class="head"><span class="stamp">Fin de partie</span><div class="score">'+got+' / '+goods+'</div><p>'+got+' bons réflexes attrapés sur '+goods+', '+hit+' piège'+(hit>1?"s":"")+' touché'+(hit>1?"s":"")+'. '+line+'</p></div>'+
+  '<div class="head"><h2>Mon mode d\'emploi</h2><p class="muted">Théo Legrain. Les trois étapes du portfolio, sans le jeu autour.</p></div>';
+  SHEET.forEach(function(b){
+    h+='<div class="card sheet"><span class="steptag">'+esc(b.tag)+'</span>';
+    b.items.forEach(function(it){h+='<div class="item"><span class="lead">'+esc(it.l)+'</span>'+(it.t?'<p>'+esc(it.t)+'</p>':dl(it.dl))+'</div>';});
+    h+='</div>';
+  });
+  h+='<div class="row"><button class="btn ghost" id="again">Rejouer depuis lundi</button></div>';
+  app.innerHTML=h;top();
+  document.getElementById("again").onclick=function(){S={lvl:0,res:[]};intro();};
+}
+
+function start(data){
+  if(data&&typeof data.lvl==="number"&&Array.isArray(data.res))S=data;
+  if(S.lvl>=LEVELS.length)final();else intro();
+}
+var hot=window.claude&&window.claude.hot;
+if(hot&&hot.snapshot)hot.snapshot(function(){return S;});
+if(hot&&hot.ready)hot.ready(start);else start((hot&&hot.data)||{});
+})();
+</script>
+</body>
+</html>
